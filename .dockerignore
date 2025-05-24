@@ -1,0 +1,6 @@
+*
+
+# Allow only the files and directories needed
+!wyoming_universal_stt/
+!uv.lock
+!pyproject.toml

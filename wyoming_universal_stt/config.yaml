@@ -1,0 +1,62 @@
+# config.yaml - Configuration-based backend selection
+
+# Default backend configuration
+default:
+  backend: auto  # auto-detect best backend
+  model: auto    # auto-select model based on backend/hardware
+  
+# Backend-specific configurations
+backends:
+  faster-whisper:
+    device: cpu
+    compute_type: int8
+    beam_size: 5
+    models:
+      - tiny-int8
+      - base-int8
+      - small-int8
+      - medium-int8
+  
+  mlx-whisper:
+    # MLX doesn't need device/compute_type
+    models:
+      - mlx-community/whisper-tiny-mlx
+      - mlx-community/whisper-base-mlx
+      - mlx-community/whisper-small-mlx
+  
+  openai-whisper:
+    models:
+      - tiny
+      - base
+      - small
+      - medium
+      - large
+
+# Hardware-specific overrides
+hardware:
+  apple_silicon:
+    preferred_backend: mlx-whisper
+    fallback_backend: faster-whisper
+  
+  nvidia_gpu:
+    preferred_backend: faster-whisper
+    device: cuda
+    compute_type: float16
+  
+  cpu_only:
+    preferred_backend: faster-whisper
+    device: cpu
+    compute_type: int8
+
+# Language-specific settings
+languages:
+  en:
+    models:
+      faster-whisper: base-int8
+      mlx-whisper: mlx-community/whisper-base-mlx
+  
+  multilingual:
+    models:
+      faster-whisper: medium-int8
+      mlx-whisper: mlx-community/whisper-medium-mlx
+
