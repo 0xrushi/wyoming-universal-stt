@@ -61,6 +61,10 @@ class SimpleVAD:
         else:
             threshold = self.energy_threshold
         
+        # Debug output every 50 frames (~3 seconds)
+        if len(self.energy_history) % 50 == 0:
+            print(f"🔊 Audio level: {energy:.1f} (threshold: {threshold:.1f})")
+        
         if energy > threshold:
             self.speech_frames += 1
             self.silence_frames = 0
@@ -238,6 +242,15 @@ class ReliableTranscriber:
                 print("🔴 Speech detected")
             elif vad_result == "speech_end":
                 print("⚪ Speech ended")
+            
+            # Debug: show periodic stats
+            if hasattr(self, '_callback_count'):
+                self._callback_count += 1
+            else:
+                self._callback_count = 1
+                
+            if self._callback_count % 500 == 0:  # Every ~30 seconds
+                print(f"📊 Audio callback running (count: {self._callback_count})")
                 
         except Exception as e:
             print(f"Audio callback error: {e}")

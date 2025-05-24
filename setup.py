@@ -12,7 +12,7 @@ if requirements_path.is_file():
     with open(requirements_path, "r", encoding="utf-8") as requirements_file:
         requirements = requirements_file.read().splitlines()
 
-module_name = "wyoming_faster_whisper"
+module_name = "wyoming_universal_stt"
 module_dir = this_dir / module_name
 data_files = []
 
@@ -44,8 +44,8 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
     ],
-    keywords="rhasspy wyoming whisper stt",
+    keywords="wyoming whisper stt",
     entry_points={
-        "console_scripts": ["wyoming-faster-whisper = wyoming_faster_whisper.__main__:run"]
+        "console_scripts": ["wyoming-universal-stt = wyoming_universal_stt.__main__:run"]
     },
 )

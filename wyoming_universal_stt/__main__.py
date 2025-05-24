@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+Modular Wyoming Whisper Server supporting multiple backends
+"""
 import argparse
 import asyncio
 import logging
@@ -6,12 +9,12 @@ import platform
 import re
 from functools import partial
 
-import faster_whisper
-from wyoming.info import AsrModel, AsrProgram, Attribution, Info
+from wyoming.info import AsrModel, AsrProgram, Info
 from wyoming.server import AsyncServer
 
-from . import __version__
-from .handler import FasterWhisperEventHandler
+from wyoming_universal_stt import __version__
+from wyoming_universal_stt.handler import WhisperEventHandler
+from wyoming_universal_stt.backends import WhisperBackendFactory, detect_optimal_backend
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,9 +23,15 @@ async def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--backend",
+        choices=WhisperBackendFactory.get_available_backends() + ["auto"],
+        default="auto",
+        help="Whisper backend to use (default: auto)",
+    )
+    parser.add_argument(
         "--model",
         required=True,
-        help="Name of faster-whisper model to use (or auto)",
+        help="Name of whisper model to use (or auto)",
     )
     parser.add_argument("--uri", required=True, help="unix:// or tcp://")
     parser.add_argument(
@@ -38,7 +47,7 @@ async def main() -> None:
     parser.add_argument(
         "--device",
         default="cpu",
-        help="Device to use for inference (default: cpu)",
+        help="Device to use for inference (default: cpu, ignored for MLX)",
     )
     parser.add_argument(
         "--language",
@@ -47,19 +56,18 @@ async def main() -> None:
     parser.add_argument(
         "--compute-type",
         default="default",
-        help="Compute type (float16, int8, etc.)",
+        help="Compute type (float16, int8, etc., ignored for MLX)",
     )
     parser.add_argument(
         "--beam-size",
         type=int,
         default=5,
-        help="Size of beam during decoding (0 for auto)",
+        help="Size of beam during decoding (0 for auto, may be ignored by some backends)",
     )
     parser.add_argument(
         "--initial-prompt",
         help="Optional text to provide as a prompt for the first window",
     )
-    #
     parser.add_argument("--debug", action="store_true", help="Log DEBUG messages")
     parser.add_argument(
         "--log-format", default=logging.BASIC_FORMAT, help="Format for log messages"
@@ -73,7 +81,6 @@ async def main() -> None:
     args = parser.parse_args()
 
     if not args.download_dir:
-        # Download to first data dir by default
         args.download_dir = args.data_dir[0]
 
     logging.basicConfig(
@@ -81,65 +88,75 @@ async def main() -> None:
     )
     _LOGGER.debug(args)
 
-    # Automatic configuration for ARM
+    # Auto-detect backend if requested
+    if args.backend == "auto":
+        args.backend = detect_optimal_backend()
+        _LOGGER.info("Auto-detected backend: %s", args.backend)
+
+    # Automatic model selection
     machine = platform.machine().lower()
     is_arm = ("arm" in machine) or ("aarch" in machine)
     if args.model == "auto":
-        args.model = "tiny-int8" if is_arm else "base-int8"
-        _LOGGER.debug("Model automatically selected: %s", args.model)
+        if args.backend == "mlx-whisper":
+            args.model = "mlx-community/whisper-tiny-mlx"
+        else:
+            args.model = "tiny-int8" if is_arm else "base-int8"
+        _LOGGER.info("Model automatically selected: %s", args.model)
 
+    # Handle beam size for ARM
     if args.beam_size <= 0:
         args.beam_size = 1 if is_arm else 5
         _LOGGER.debug("Beam size automatically selected: %s", args.beam_size)
 
-    # Resolve model name
+    # Resolve model name for faster-whisper
     model_name = args.model
-    match = re.match(r"^(tiny|base|small|medium)[.-]int8$", args.model)
-    if match:
-        # Original models re-uploaded to huggingface
-        model_size = match.group(1)
-        model_name = f"{model_size}-int8"
-        args.model = f"rhasspy/faster-whisper-{model_name}"
+    if args.backend == "faster-whisper":
+        match = re.match(r"^(tiny|base|small|medium)[.-]int8$", args.model)
+        if match:
+            model_size = match.group(1)
+            model_name = f"{model_size}-int8"
+            args.model = f"rhasspy/faster-whisper-{model_name}"
 
     if args.language == "auto":
-        # Whisper does not understand "auto"
         args.language = None
 
+    # Create backend
+    backend_kwargs = {
+        'download_dir': args.download_dir,
+        'device': args.device,
+        'compute_type': args.compute_type,
+    }
+    
+    try:
+        whisper_backend = WhisperBackendFactory.create_backend(
+            args.backend, args.model, **backend_kwargs
+        )
+        _LOGGER.info("Loaded %s backend with model %s", args.backend, args.model)
+    except Exception as e:
+        _LOGGER.error("Failed to load backend %s: %s", args.backend, e)
+        return
+
+    # Create Wyoming info
     wyoming_info = Info(
         asr=[
             AsrProgram(
-                name="faster-whisper",
-                description="Faster Whisper transcription with CTranslate2",
-                attribution=Attribution(
-                    name="Guillaume Klein",
-                    url="https://github.com/guillaumekln/faster-whisper/",
-                ),
+                name=f"{args.backend}",
+                description=f"Whisper transcription using {args.backend}",
+                attribution=whisper_backend.get_attribution(),
                 installed=True,
                 version=__version__,
                 models=[
                     AsrModel(
                         name=model_name,
                         description=model_name,
-                        attribution=Attribution(
-                            name="Systran",
-                            url="https://huggingface.co/Systran",
-                        ),
+                        attribution=whisper_backend.get_attribution(),
                         installed=True,
-                        languages=faster_whisper.tokenizer._LANGUAGE_CODES,  # pylint: disable=protected-access
-                        version=faster_whisper.__version__,
+                        languages=whisper_backend.get_supported_languages(),
+                        version=whisper_backend.get_version(),
                     )
                 ],
             )
         ],
-    )
-
-    # Load model
-    _LOGGER.debug("Loading %s", args.model)
-    whisper_model = faster_whisper.WhisperModel(
-        args.model,
-        download_root=args.download_dir,
-        device=args.device,
-        compute_type=args.compute_type,
     )
 
     server = AsyncServer.from_uri(args.uri)
@@ -147,17 +164,14 @@ async def main() -> None:
     model_lock = asyncio.Lock()
     await server.run(
         partial(
-            FasterWhisperEventHandler,
+            WhisperEventHandler,
             wyoming_info,
             args,
-            whisper_model,
+            whisper_backend,
             model_lock,
             initial_prompt=args.initial_prompt,
         )
     )
-
-
-# -----------------------------------------------------------------------------
 
 
 def run() -> None:

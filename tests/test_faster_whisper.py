@@ -28,7 +28,7 @@ async def test_faster_whisper() -> None:
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
-        "wyoming_faster_whisper",
+        "wyoming_universal_stt",
         "--uri",
         "stdio://",
         "--model",

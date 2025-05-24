@@ -15,3 +15,8 @@ __pycache__/
 
 /dist/
 /local/
+.vscode/settings.json
+test_recording.wav
+wyoming_universal_stt/wyoming_whisper.py
+test_server.py
+test_mic.py
