@@ -1,75 +1,161 @@
-# Wyoming Faster Whisper
+# Wyoming Universal STT
 
-[Wyoming protocol](https://github.com/rhasspy/wyoming) server for the [faster-whisper](https://github.com/guillaumekln/faster-whisper/) speech to text system.
+A universal [Wyoming protocol](https://github.com/rhasspy/wyoming) server that supports multiple Whisper backends for speech-to-text transcription. This project provides a unified interface to switch between different Whisper implementations without changing your client code.
 
-## Home Assistant Add-on
+I initially explored [rhasspy/wyoming-faster-whisper](https://github.com/rhasspy/wyoming-faster-whisper), but ran into limitations with MLX and other model support—this project was created to address those gaps.
 
-[![Show add-on](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=core_whisper)
 
-[Source](https://github.com/home-assistant/addons/tree/master/whisper)
+## Supported Backends
 
-## Local Install
+- **faster-whisper** - Optimized local inference using CTranslate2
+- **mlx-whisper** - Apple Silicon optimized inference (macOS only)  
+- **openai-whisper-api** - OpenAI's proprietary API service
 
-Clone the repository and set up Python virtual environment:
+## Quick Start
 
-``` sh
-git clone https://github.com/rhasspy/wyoming-faster-whisper.git
-cd wyoming-faster-whisper
-script/setup
+### Installation
+
+Install with your preferred backend:
+
+```bash
+# For faster-whisper (CPU/GPU optimized)
+uv sync --extra faster-whisper
+
+# For MLX (Apple Silicon only)
+uv sync --extra mlx
+
+# For OpenAI API
+uv sync --extra openai-whisper
+
 ```
 
-Run a server anyone can connect to:
+## Backend Switching
 
-```sh
-script/run --model tiny-int8 --language en --uri 'tcp://0.0.0.0:10300' --data-dir /data --download-dir /data
+### Faster-Whisper Backend
+Best for most users - optimized local inference with good speed/accuracy balance.
+
+```bash
+python -m wyoming_universal_stt \
+    --backend faster-whisper \
+    --model tiny \
+    --language en \
+    --uri 'tcp://0.0.0.0:10300' \
+    --data-dir /tmp/whisper \
+    --download-dir /tmp/whisper \
+    --device cpu
 ```
 
-The `--model` can also be a HuggingFace model like `Systran/faster-distil-whisper-small.en`
+**Available models:**
+- `tiny`, `tiny-int8` - Fastest, least accurate
+- `base`, `base-int8` - Good balance  
+- `small`, `small-int8` - Better accuracy
+- `medium`, `medium-int8` - Even better accuracy
+- `large-v2`, `large-v3` - Best accuracy
 
-## Docker
+**Devices:** `cpu`, `cuda`, `auto`
 
-### CPU
+### MLX Backend (macOS Only)
+Optimized for Apple Silicon with excellent performance and energy efficiency.
 
-#### Build Docker Image
-``` sh
-docker build -t wyoming-whisper -f Dockerfile.cpu .
+```bash
+python -m wyoming_universal_stt \
+    --backend mlx-whisper \
+    --model tiny \
+    --language en \
+    --uri 'tcp://0.0.0.0:10300' \
+    --data-dir /tmp/whisper \
+    --download-dir /tmp/whisper
 ```
 
-#### Run Docker Image 
-``` sh
-docker run -it -p 10300:10300 -v /path/to/local/data:/data rhasspy/wyoming-whisper \
-    --model tiny-int8 --language en --data-dir /path/to/local/data
+**Available models:**
+- `tiny`, `base`, `small`, `medium`, `large`, `large-v2`, `large-v3`
+- `mlx-community/whisper-tiny-mlx` - MLX-optimized models
+
+### OpenAI API Backend
+Uses OpenAI's proprietary Whisper API - requires internet and API key.
+
+```bash
+# Set your API key
+export OPENAI_API_KEY="your-api-key-here"
+
+python -m wyoming_universal_stt \
+    --backend openai-whisper \
+    --model whisper-1 \
+    --language en \
+    --uri 'tcp://0.0.0.0:10300' \
+    --data-dir /tmp/whisper \
+    --download-dir /tmp/whisper
 ```
 
-#### Docker Compose
+**Benefits:**
+- Always latest model
+- No local compute needed
+- Consistent performance
+- No storage requirements
 
-When using docker compose for CPU, 
+**Requirements:**
+- OpenAI API key
+- Internet connection
+- Costs money per request
 
-``` sh
-docker compose up -f docker-compose.cpu.yml -d
+## Advanced Configuration
+
+### Platform-Specific Examples
+
+**Linux/Windows (no MLX):**
+```bash
+uv sync --extra faster-whisper
+python -m wyoming_universal_stt --backend faster-whisper --model base --uri 'tcp://0.0.0.0:10300' --data-dir /tmp/whisper
 ```
 
-### GPU
-
-#### Build Docker Image
-``` sh
-docker build -t wyoming-whisper -f Dockerfile.gpu .
+**macOS with Apple Silicon:**
+```bash
+uv sync --extra mlx
+python -m wyoming_universal_stt --backend mlx-whisper --model tiny --uri 'tcp://0.0.0.0:10300' --data-dir /tmp/whisper
 ```
 
-#### Run Docker Image (GPU)
-
-``` sh
-docker run -it -p 10300:10300 -v /path/to/local/data:/data wyoming-whisper \
-    --model tiny-int8 --language en --device cuda --data-dir /path/to/local/data
+**Cloud/API Usage:**
+```bash
+uv sync --extra openai-whisper
+export OPENAI_API_KEY="sk-..."
+python -m wyoming_universal_stt --backend openai-whisper --model whisper-1 --uri 'tcp://0.0.0.0:10300' --data-dir /tmp/whisper
 ```
 
-#### Docker Compose
+## Docker Support
 
-``` sh
-docker compose up -d
+### CPU-Optimized (Faster-Whisper)
+```bash
+docker build -t wyoming-universal-stt .
+docker run -p 10300:10300 wyoming-universal-stt --backend faster-whisper --model tiny
 ```
 
-**NOTE**: Models are downloaded temporarily to the `HF_HUB_CACHE` directory, which defaults to `~/.cache/huggingface/hub`.
-You may need to adjust this environment variable when using a read-only root filesystem (e.g., `HF_HUB_CACHE=/tmp`).
+### GPU Support
+```bash
+docker run --gpus all -p 10300:10300 wyoming-universal-stt --backend faster-whisper --model base --device cuda
+```
 
-[Source](https://github.com/rhasspy/wyoming-addons/tree/master/whisper)
+## Integration with Home Assistant
+
+This server is compatible with Home Assistant's Wyoming integration. Configure it as a speech-to-text provider:
+
+```yaml
+# configuration.yaml
+wyoming:
+  - uri: tcp://your-server:10300
+```
+
+## Troubleshooting
+
+**MLX not available:**
+- MLX only works on macOS with Apple Silicon (M1/M2/M3)
+- Use `--backend faster-whisper` on other platforms
+
+**Model download failures:**
+- Check your `--download-dir` permissions
+- Ensure sufficient disk space
+- For OpenAI backend, verify API key
+
+
+## License
+
+MIT License - see LICENSE file for details.
