@@ -40,8 +40,8 @@ python -m wyoming_universal_stt \
     --model tiny \
     --language en \
     --uri 'tcp://0.0.0.0:10300' \
-    --data-dir /tmp/whisper \
-    --download-dir /tmp/whisper \
+    --data-dir ./whisper-data \
+    --download-dir ./whisper-data \
     --device cpu
 ```
 
@@ -63,8 +63,8 @@ python -m wyoming_universal_stt \
     --model tiny \
     --language en \
     --uri 'tcp://0.0.0.0:10300' \
-    --data-dir /tmp/whisper \
-    --download-dir /tmp/whisper
+    --data-dir ./whisper-data \
+    --download-dir ./whisper-data
 ```
 
 **Available models:**
@@ -83,8 +83,8 @@ python -m wyoming_universal_stt \
     --model whisper-1 \
     --language en \
     --uri 'tcp://0.0.0.0:10300' \
-    --data-dir /tmp/whisper \
-    --download-dir /tmp/whisper
+    --data-dir ./whisper-data \
+    --download-dir ./whisper-data
 ```
 
 **Benefits:**
@@ -105,20 +105,20 @@ python -m wyoming_universal_stt \
 **Linux/Windows (no MLX):**
 ```bash
 uv sync --extra faster-whisper
-python -m wyoming_universal_stt --backend faster-whisper --model base --uri 'tcp://0.0.0.0:10300' --data-dir /tmp/whisper
+python -m wyoming_universal_stt --backend faster-whisper --model base --uri 'tcp://0.0.0.0:10300' --data-dir ./whisper-data
 ```
 
 **macOS with Apple Silicon:**
 ```bash
 uv sync --extra mlx
-python -m wyoming_universal_stt --backend mlx-whisper --model tiny --uri 'tcp://0.0.0.0:10300' --data-dir /tmp/whisper
+python -m wyoming_universal_stt --backend mlx-whisper --model tiny --uri 'tcp://0.0.0.0:10300' --data-dir ./whisper-data
 ```
 
 **Cloud/API Usage:**
 ```bash
 uv sync --extra openai-whisper
 export OPENAI_API_KEY="sk-..."
-python -m wyoming_universal_stt --backend openai-whisper --model whisper-1 --uri 'tcp://0.0.0.0:10300' --data-dir /tmp/whisper
+python -m wyoming_universal_stt --backend openai-whisper --model whisper-1 --uri 'tcp://0.0.0.0:10300' --data-dir ./whisper-data
 ```
 
 ## Docker Support
